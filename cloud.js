@@ -40,6 +40,7 @@ function showEditor(){
  (!cloudLessons.length?'<p class="muted">Aucun cours en ligne pour le moment.</p>':'')+
  '<p class="muted">Tes cours créés auparavant en local ne sont pas encore importés automatiquement. L’import photo et PDF sera ajouté dans une prochaine version.</p>';
  document.getElementById("sharedStats").onclick=sharedStats;
+ document.getElementById("profilesButton").onclick=showProfiles;
  const status=(id,t)=>document.getElementById(id).textContent=t;
  if(user){document.getElementById("disconnect").onclick=async()=>{const{error}=await client.auth.signOut();if(error)status("authStatus",error.message)};
  document.getElementById("reloadCloud").onclick=async()=>{await loadLessons();showEditor()}}
@@ -102,6 +103,25 @@ async function sharedStats(){
  document.getElementById("returnToLessons").onclick=showEditor;
 }
 
+
+async function showProfiles(){
+ if(!user){app.innerHTML='<section class="panel"><h2>Mon profil</h2><p>Connecte-toi depuis « Ajouter un cours » pour créer ton profil.</p><button id="backProfile">Retour</button></section>';document.getElementById("backProfile").onclick=showEditor;return}
+ const {data,error}=await client.from("student_profiles").select("nickname,leaderboard_opt_in").eq("user_id",user.id).maybeSingle();
+ if(error){app.innerHTML='<p>Erreur du profil : '+esc(error.message)+'</p><button id="backProfile">Retour</button>';document.getElementById("backProfile").onclick=showEditor;return}
+ let ranking=[],err=null;
+ const response=await client.rpc("get_learning_leaderboard");ranking=response.data||[];err=response.error;
+ app.innerHTML='<button id="profileBack">← Cours communs</button><section class="panel"><h2>Mon profil</h2><p>Choisis un pseudonyme public. Ton adresse e-mail reste privée.</p><label>Pseudonyme <input id="nickname" maxlength="30" style="width:100%;padding:12px" value="'+esc(data?.nickname||"")+'" placeholder="2 à 30 caractères"></label><p><label><input type="checkbox" id="optIn" '+(data?.leaderboard_opt_in?"checked":"")+'> Participer au classement public</label></p><button id="saveProfile" class="primary">Enregistrer mon profil</button><p id="profileMsg" role="status"></p></section><section class="panel"><h2>Classement volontaire</h2><p class="muted">Comparaison des taux de bonnes réponses sur les cours partagés, après 10 tentatives minimum.</p>'+(err?'<p>Classement indisponible : '+esc(err.message)+'</p>':ranking.length?ranking.map((x,i)=>'<div class="item"><strong>'+ (i+1)+'. '+esc(x.nickname)+'</strong> · '+esc(x.accuracy_percent)+' % <small>('+x.attempts+' réponses)</small></div>').join(""):'<p>Personne ne figure encore dans le classement.</p>')+'</section>';
+ document.getElementById("profileBack").onclick=showEditor;
+ document.getElementById("saveProfile").onclick=async()=>{
+ const nickname=document.getElementById("nickname").value.trim(),opt=document.getElementById("optIn").checked;
+ if(nickname.length<2||nickname.length>30){document.getElementById("profileMsg").textContent="Entre 2 et 30 caractères.";return}
+ const {error}=await client.from("student_profiles").upsert({user_id:user.id,nickname,leaderboard_opt_in:opt},{onConflict:"user_id"});
+ if(error){document.getElementById("profileMsg").textContent=error.message;return}
+ await showProfiles()
+ };
+}
+
+window.cloudCourseEditor=showEditor;
 window.courseEditor=showEditor;
 if(!startClient()){console.warn("Supabase n'a pas été chargé");}
 })();
