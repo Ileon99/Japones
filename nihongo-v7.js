@@ -176,7 +176,7 @@ const characterStore="nihongo-characters-v7:";
 function cKey(){return characterStore+(currentUser?.id||"invité")}
 function cRead(){try{return JSON.parse(localStorage.getItem(cKey())||"{}")}catch{return {}}}
 function cWrite(m){localStorage.setItem(cKey(),JSON.stringify(m))}
-function cItems(){return alphabetMode==="kanji"?kanji.map((x,i)=>({id:"kanji-"+i,glyph:x[0],answer:x[2],reading:x[1]})):(alphabetMode==="hiragana"?hiragana:katakana).map((x,i)=>({id:alphabetMode+"-"+i,glyph:x,answer:rowset[i],reading:rowset[i]}))}
+function cItems(){return alphabetMode==="kanji"?kanji.map((x,i)=>({id:"kanji-"+i,glyph:x[0],answer:x[2],reading:x[1]})):Array.from(alphabetMode==="hiragana"?hiragana:katakana).map((x,i)=>({id:alphabetMode+"-"+i,glyph:x,answer:rowset[i],reading:rowset[i]}))}
 const cModeTitle=()=>alphabetMode==="hiragana"?"Hiragana":alphabetMode==="katakana"?"Katakana":"Kanji";
 function cStage(m){return Math.min(Math.max(0,Number(m["_stage_"+alphabetMode]||0)),Math.ceil(cItems().length/5)-1)}
 function cGroup(m){const all=cItems(),start=cStage(m)*5;return all.slice(start,start+5).filter(x=>!m[x.id]?.mastered)}
