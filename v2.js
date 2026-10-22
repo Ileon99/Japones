@@ -30,7 +30,7 @@ function courseEditor(){
 }
 const renderBase=render;
 render=function(){
- if(view==="writing"||view==="editor"){nav.innerHTML='<button id="backHome">← Mes cours</button>';document.querySelector("#backHome").onclick=()=>go("home");if(view==="writing")showWriting();else courseEditor();return}
+ if(view==="writing"||view==="editor"){nav.innerHTML='<button id="backHome">← Mes cours</button>';document.querySelector("#backHome").onclick=()=>go("home");if(view==="writing")showWriting();else (window.cloudCourseEditor?window.cloudCourseEditor():courseEditor());return}
  renderBase();
  // Translate interface after rendering, preserving Japanese text.
  const walker=document.createTreeWalker(app,NodeFilter.SHOW_TEXT);
