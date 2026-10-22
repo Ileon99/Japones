@@ -117,3 +117,56 @@ function showQuiz(){
  document.getElementById("freeAnswer")?.addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("validate").click()});
  document.getElementById("next").onclick=()=>{qIndex++;render()};
 }
+
+
+/* Parcours ludique V4 — étoiles calculées à partir des réponses enregistrées. */
+const oldCourseView=showCourses;
+showCourses=function(){
+ oldCourseView();
+ if(!currentUser)return;
+ const panels=[...root.querySelectorAll("section.panel")].filter(x=>x.querySelector("[data-quiz]"));
+ panels.forEach((panel,i)=>{
+   const course=courses[i];if(!course)return;
+   panel.classList.add("level-node");
+   const h=panel.querySelector("h3");
+   if(h){const no=document.createElement("span");no.className="level-number";no.textContent="Niveau "+(i+1)+" · ";h.prepend(no)}
+   const target=document.createElement("div");target.className="level-stars";target.textContent="☆☆☆ · Commence un défi pour gagner des étoiles";panel.append(target);
+   panel.querySelector("[data-quiz]")?.setAttribute("aria-label","Jouer au niveau "+(i+1));
+ });
+ let visited=0;
+ const profileItems=courses.flatMap(c=>c.items.map(x=>x.id));
+ if(!profileItems.length)return;
+ db.from("review_progress").select("item_id,attempts,correct").eq("owner_id",currentUser.id).then(({data,error})=>{
+   if(error||screen!=="courses")return;
+   const history=new Map((data||[]).map(x=>[x.item_id,x]));
+   panels.forEach((panel,i)=>{
+     const c=courses[i],dest=panel.querySelector(".level-stars");if(!c||!dest)return;
+     const seen=c.items.map(x=>history.get(x.id)).filter(Boolean);
+     const attempted=seen.reduce((n,x)=>n+x.attempts,0),correct=seen.reduce((n,x)=>n+x.correct,0);
+     const percentage=attempted?Math.round(100*correct/attempted):0;
+     // Étoiles pour un minimum de quatre réponses, puis seuils de maîtrise.
+     const stars=attempted>=4?(percentage>=90?3:percentage>=70?2:percentage>=50?1:0):0;
+     if(attempted)visited++;
+     dest.textContent="★".repeat(stars)+"☆".repeat(3-stars)+" · "+(attempted?percentage+" % de réussite ("+attempted+" réponses)":"Nouveau défi");
+     dest.setAttribute("aria-label",stars+" étoiles sur 3");
+   });
+   const headline=root.querySelector("h2");
+   if(headline){const info=document.createElement("p");info.className="journey-progress";info.textContent=visited+" niveau"+(visited>1?"x":"")+" commencé"+(visited>1?"s":"")+" sur "+courses.length;headline.after(info)}
+ });
+};
+const oldChallengeView=showQuiz;
+showQuiz=function(){
+ oldChallengeView();
+ const panel=root.querySelector("section.panel");if(!panel)return;
+ const existing=panel.querySelector(".journey-mascot");if(existing)existing.remove();
+ const mascot=document.createElement("div");mascot.className="journey-mascot";
+ const face=document.createElement("span");face.className="mascot-face";face.setAttribute("role","img");face.setAttribute("aria-label","Une petite mascotte souriante");face.textContent=qIndex>=quiz.length?"🦎🎉":"🦎";
+ const saying=document.createElement("span");saying.className="mascot-saying";saying.textContent=qIndex>=quiz.length?"Félicitations ! Tu as gagné "+(score>=8?"3 étoiles ! ⭐⭐⭐":score>=5?"2 étoiles ! ⭐⭐":"1 étoile pour tes efforts ! ⭐"):"Tu peux le faire ! がんばって !";
+ mascot.append(face,saying);panel.prepend(mascot);
+ const feedback=panel.querySelector("#feedback");
+ if(feedback){
+  const obs=new MutationObserver(()=>{const txt=feedback.textContent||"";if(txt.startsWith("✅")){face.textContent="🦎✨";saying.textContent="Excellent ! Continue !"}else if(txt.startsWith("💡")){face.textContent="🦎💚";saying.textContent="Essaie encore, tu progresses !"}});
+  obs.observe(feedback,{childList:true,characterData:true,subtree:true});
+  panel.querySelector("#next")?.addEventListener("click",()=>obs.disconnect(),{once:true});
+ }
+};
