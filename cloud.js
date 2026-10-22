@@ -6,7 +6,7 @@ let client=null,user=null,cloudLessons=[],busy=false;
 function startClient(){
  if(!window.supabase?.createClient){return false}
  client=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
- client.auth.onAuthStateChange(async (event,session)=>{user=session?.user||null;if(user){await loadLessons()}else cloudLessons=[];if(typeof view!=="undefined"&&view==="editor")courseEditor()});
+ client.auth.onAuthStateChange((event,session)=>{user=session?.user||null;setTimeout(async()=>{if(user)await loadLessons();else cloudLessons=[];if(typeof view!=="undefined"&&view==="editor")courseEditor()},0)});
  client.auth.getUser().then(async({data,error})=>{if(!error){user=data.user;if(user)await loadLessons();if(typeof view!=="undefined"&&view==="editor")courseEditor()}});return true;
 }
 async function loadLessons(){
