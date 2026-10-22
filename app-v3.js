@@ -63,3 +63,57 @@ function showWritingQuiz(){const items=alphabetMode==="kanji"?kanji.map(x=>[x[0]
 function render(){drawNav();if(screen==="home")showHome();else if(screen==="courses")showCourses();else if(screen==="account")showAccount();else if(screen==="edit")showEditor();else if(screen==="profile")showProfile();else if(screen==="leaderboard")showLeaderboard();else if(screen==="writing")showWriting();else if(screen==="quiz")showQuiz();else if(screen==="writingQuiz")showWritingQuiz()}
 async function init(){if(!db){root.innerHTML='<p>Impossible de charger Supabase. Vérifie ta connexion et actualise.</p>';return}db.auth.onAuthStateChange((event,session)=>{setTimeout(async()=>{currentUser=session?.user||null;await reloadCourses();if(screen!=="quiz"&&screen!=="writingQuiz")render()},0)});await getSession();render()}
 init();
+
+/* Parcours ludique : affichage pédagogique et mini-jeux. */
+const pedagogicTitles=[
+ [/cours\s*1.*salut|^salut/i,["Dire bonjour et prendre congé","Saluer et remercier au quotidien","👋"]],
+ [/cours\s*1.*classe|en classe/i,["Comprendre les consignes en classe","Écouter, répondre et demander de l’aide","🎒"]],
+ [/cours\s*1.*métier|profession/i,["Se présenter et parler de son métier","Dire son nom, sa profession et son pays","🙋"]],
+ [/cours\s*1.*gramm|grammaire.*présent/i,["Construire ses premières phrases","Utiliser さん et も","🧩"]],
+ [/cours\s*2.*objet|^objets/i,["Nommer les objets autour de soi","Reconnaître le vocabulaire du quotidien","✏️"]],
+ [/cours\s*2.*famill|famille/i,["Présenter sa famille","Distinguer les termes pour sa famille et celle des autres","🏠"]],
+ [/cours\s*2.*gramm|grammaire.*appartien/i,["Demander à qui appartient un objet","Poser des questions avec だれ et の","🔎"]],
+ [/cours\s*3.*gramm/i,["Demander ce que c’est et combien ça coûte","Construire des questions simples","🧠"]],
+ [/cours\s*3/i,["Commander au restaurant et demander le prix","Nourriture, boissons et addition","🍣"]]
+];
+function courseInfo(c){const raw=c.title||"";const match=pedagogicTitles.find(([re])=>re.test(raw));return match?match.slice(1):[raw,"Vocabulaire et expressions du cours","📚"]}
+function showCourses(){
+ root.innerHTML='<h2>Mon parcours japonais</h2><p class="muted">Des défis courts et variés pour apprendre à ton rythme.</p>'+
+ (currentUser?'<p class="muted">Connecté : '+escapeHTML(currentUser.email)+'</p>':'<section class="panel"><h3>Connexion nécessaire</h3><p>Connecte-toi pour retrouver tes cours et tes résultats.</p></section>')+
+ '<div class="actions"><button class="primary" id="accountButton">'+(currentUser?"Mon compte":"Se connecter")+'</button>'+(editor?'<button id="addCourse">Ajouter un cours commun</button>':'')+'</div>'+
+ (currentUser?courses.map((c,i)=>{const [name,desc,emoji]=courseInfo(c);return '<section class="panel"><div style="display:flex;gap:12px;align-items:start"><span style="font-size:2rem" aria-hidden="true">'+emoji+'</span><div><span class="pill">'+(c.lesson_number?"Cours "+c.lesson_number:"Leçon")+'</span><h3 style="margin:10px 0 4px">'+escapeHTML(name)+'</h3><p class="muted">'+escapeHTML(desc)+'</p><p>'+c.items.length+' mots et expressions</p></div></div><div class="actions"><button data-open="'+i+'">Découvrir</button><button class="primary" data-quiz="'+i+'">Jouer ▶</button></div></section>'}).join("")||'<section class="panel">Aucun cours disponible pour le moment.</section>':'');
+ document.getElementById("accountButton").onclick=()=>navigate("account");
+ document.getElementById("addCourse")?.addEventListener("click",()=>navigate("edit"));
+ root.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>showCourse(courses[Number(b.dataset.open)]));
+ root.querySelectorAll("[data-quiz]").forEach(b=>b.onclick=()=>startQuiz(courses[Number(b.dataset.quiz)]));
+}
+let playMode=0;
+function startQuiz(c){
+ if(c.items.length<4){root.innerHTML='<section class="panel"><p>Il faut au moins quatre mots pour jouer.</p><button id="back">Retour</button></section>';document.getElementById("back").onclick=()=>navigate("courses");return}
+ activeCourse=c;quiz=[...c.items].sort(()=>Math.random()-.5).slice(0,Math.min(10,c.items.length));qIndex=0;score=0;navigate("quiz")
+}
+function normAnswer(x){return String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("fr").replace(/[’']/g," ").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim()}
+function showQuiz(){
+ if(qIndex>=quiz.length){root.innerHTML='<section class="panel" style="text-align:center"><div style="font-size:3rem">🎉</div><h2>Défi terminé !</h2><p class="jp">'+score+' / '+quiz.length+'</p><p>'+ (score>=8?"Formidable !":score>=5?"Bien joué ! Continue de t’entraîner.":"Chaque erreur est une occasion d’apprendre !") +'</p><div class="actions" style="justify-content:center"><button class="primary" id="retry">Rejouer</button><button id="back">Mes cours</button></div></section>';document.getElementById("retry").onclick=()=>startQuiz(activeCourse);document.getElementById("back").onclick=()=>navigate("courses");return}
+ const item=quiz[qIndex],mode=qIndex%3,options=[item,...activeCourse.items.filter(x=>x.id!==item.id).sort(()=>Math.random()-.5).slice(0,3)].sort(()=>Math.random()-.5);
+ const common='<div class="bar"><div class="fill" style="width:'+(100*qIndex/quiz.length)+'%"></div></div><p class="muted">Défi '+(qIndex+1)+' sur '+quiz.length+'</p>';
+ let content='';
+ if(mode===0)content='<span class="pill">🎯 Choisis la traduction</span><h2>Que signifie ce mot ?</h2><div class="jp" lang="ja">'+escapeHTML(item.japanese)+'</div>'+options.map(o=>'<button class="choice" data-choice="'+escapeHTML(o.id)+'">'+escapeHTML(o.french)+'</button>').join("");
+ if(mode===1)content='<span class="pill">🔄 Traduction inversée</span><h2>Quel mot japonais signifie :</h2><h3>'+escapeHTML(item.french)+'</h3>'+options.map(o=>'<button class="choice" data-choice="'+escapeHTML(o.id)+'" lang="ja">'+escapeHTML(o.japanese)+'</button>').join("");
+ if(mode===2)content='<span class="pill">✍️ Réponse libre</span><h2>Écris la traduction en français</h2><div class="jp" lang="ja">'+escapeHTML(item.japanese)+'</div><input class="field" id="freeAnswer" autocomplete="off" placeholder="Ta réponse"><button class="primary" id="validate">Vérifier</button><p class="muted">Les variantes proches peuvent être refusées : la correction exacte est affichée après ta réponse.</p>';
+ root.innerHTML='<section class="panel">'+common+content+'<p id="feedback" role="status"></p><button class="primary" id="next" hidden>Continuer →</button></section>';
+ let locked=false;
+ async function conclude(ok,chosen){
+  if(locked)return;locked=true;if(ok)score++;
+  root.querySelectorAll("[data-choice]").forEach(b=>{b.disabled=true;if(b.dataset.choice===item.id)b.classList.add("right");else if(b===chosen)b.classList.add("wrong")});
+  document.getElementById("validate")?.setAttribute("disabled","disabled");
+  document.getElementById("freeAnswer")?.setAttribute("disabled","disabled");
+  const feedback=document.getElementById("feedback");feedback.textContent=(ok?"✅ Bravo !":"💡 Bonne réponse : "+item.french+" — "+item.japanese);
+  try{await saveAnswer(item,ok)}catch(err){feedback.textContent+=" · Enregistrement impossible : "+err.message}
+  document.getElementById("next").hidden=false;
+ }
+ root.querySelectorAll("[data-choice]").forEach(b=>b.onclick=()=>conclude(b.dataset.choice===item.id,b));
+ document.getElementById("validate")?.addEventListener("click",()=>{const ans=document.getElementById("freeAnswer").value;conclude(normAnswer(ans)===normAnswer(item.french),null)});
+ document.getElementById("freeAnswer")?.addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("validate").click()});
+ document.getElementById("next").onclick=()=>{qIndex++;render()};
+}
